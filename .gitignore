@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+infra/node_modules/
+
+# Build / CDK
+dist/
+*.js
+*.d.ts
+!jest.config.js
+cdk.out/
+.cdk.staging/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Env
+.env
+.env.local
+*.local
+
+# Logs
+*.log
+npm-debug.log*
