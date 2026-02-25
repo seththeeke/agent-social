@@ -53,6 +53,66 @@ const topicSets = {
   culture: ['book recommendations', 'art exhibitions', 'historical events', 'philosophy discussions', 'education reform'],
 };
 
+// RSS feeds by interest category - using reliable, free RSS feeds
+const rssFeedSets = {
+  news: [
+    'https://feeds.bbci.co.uk/news/rss.xml',
+    'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml',
+    'https://feeds.npr.org/1001/rss.xml',
+    'https://www.theguardian.com/world/rss',
+    'https://feeds.reuters.com/reuters/topNews',
+  ],
+  sports: [
+    'https://www.espn.com/espn/rss/news',
+    'https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml',
+    'https://feeds.bbci.co.uk/sport/rss.xml',
+    'https://www.theguardian.com/sport/rss',
+  ],
+  tech: [
+    'https://feeds.arstechnica.com/arstechnica/technology-lab',
+    'https://www.theverge.com/rss/index.xml',
+    'https://feeds.wired.com/wired/index',
+    'https://techcrunch.com/feed/',
+    'https://news.ycombinator.com/rss',
+  ],
+  politics: [
+    'https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml',
+    'https://feeds.bbci.co.uk/news/politics/rss.xml',
+    'https://www.theguardian.com/politics/rss',
+    'https://feeds.npr.org/1014/rss.xml',
+  ],
+  entertainment: [
+    'https://www.theguardian.com/culture/rss',
+    'https://rss.nytimes.com/services/xml/rss/nyt/Movies.xml',
+    'https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml',
+    'https://variety.com/feed/',
+  ],
+  science: [
+    'https://rss.nytimes.com/services/xml/rss/nyt/Science.xml',
+    'https://feeds.bbci.co.uk/news/science_and_environment/rss.xml',
+    'https://www.theguardian.com/science/rss',
+    'https://www.nasa.gov/rss/dyn/breaking_news.rss',
+    'https://feeds.arstechnica.com/arstechnica/science',
+  ],
+  business: [
+    'https://rss.nytimes.com/services/xml/rss/nyt/Business.xml',
+    'https://feeds.bbci.co.uk/news/business/rss.xml',
+    'https://www.theguardian.com/business/rss',
+    'https://feeds.reuters.com/reuters/businessNews',
+  ],
+  lifestyle: [
+    'https://rss.nytimes.com/services/xml/rss/nyt/Travel.xml',
+    'https://www.theguardian.com/lifeandstyle/rss',
+    'https://feeds.bbci.co.uk/food/rss.xml',
+  ],
+  culture: [
+    'https://rss.nytimes.com/services/xml/rss/nyt/Arts.xml',
+    'https://rss.nytimes.com/services/xml/rss/nyt/Books.xml',
+    'https://www.theguardian.com/books/rss',
+    'https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml',
+  ],
+};
+
 // Personality types with prompts
 const personalityTypes = {
   extremelyNegative: (name, interests) => `You are ${name}, a deeply cynical and pessimistic commentator. You see conspiracies, corruption, and hidden agendas everywhere. Every news story confirms your darkest suspicions about society. You use phrases like "wake up people", "this is what they don't want you to know", and "I told you so". You're borderline hostile and find fault in everything. When you find an interesting article, include the URL link in your post with your scathing commentary. Sometimes you just vent without links. Your interests: ${interests.join(', ')}.`,
@@ -92,6 +152,14 @@ function generateAgent(name, personalityType, primaryInterest, secondaryInterest
     ...pickRandomN(topicSets[primaryInterest], 3),
     ...pickRandomN(topicSets[secondaryInterest], 2),
   ];
+
+  // RSS feeds: get feeds from both interest categories
+  const primaryFeeds = rssFeedSets[primaryInterest] || [];
+  const secondaryFeeds = rssFeedSets[secondaryInterest] || [];
+  const rssFeeds = [
+    ...pickRandomN(primaryFeeds, 2),
+    ...pickRandomN(secondaryFeeds, 1),
+  ];
   
   const prompt = personalityTypes[personalityType](displayName, interests);
   
@@ -126,11 +194,12 @@ function generateAgent(name, personalityType, primaryInterest, secondaryInterest
   
   return {
     agentId,
-    version: 1,
+    version: 2,
     personaName: displayName,
     personaPrompt: prompt,
     interests,
     topics,
+    rssFeeds,
     followingList,
     postingFrequency,
     searchFrequency,
@@ -196,13 +265,18 @@ function main() {
   for (const agent of agents) {
     const filePath = path.join(agentsDir, `${agent.agentId}.json`);
     fs.writeFileSync(filePath, JSON.stringify(agent, null, 2) + '\n');
-    console.log(`Created ${agent.agentId} (${agent.personaName})`);
+    console.log(`Created ${agent.agentId} (${agent.personaName}) with ${agent.rssFeeds.length} RSS feeds`);
   }
   
   console.log(`\nGenerated ${agents.length} agents!`);
   console.log('\nPersonality distribution:');
   for (const { type, count } of distribution) {
     console.log(`  ${type}: ${count}`);
+  }
+  
+  console.log('\nRSS feed categories:');
+  for (const [category, feeds] of Object.entries(rssFeedSets)) {
+    console.log(`  ${category}: ${feeds.length} feeds`);
   }
 }
 

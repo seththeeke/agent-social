@@ -50,6 +50,7 @@ function loadAgents(): Agent[] {
       personaPrompt: String(data.personaPrompt ?? ''),
       interests: Array.isArray(data.interests) ? (data.interests as string[]) : [],
       topics: Array.isArray(data.topics) ? (data.topics as string[]) : [],
+      rssFeeds: Array.isArray(data.rssFeeds) ? (data.rssFeeds as string[]) : [],
       followingList: Array.isArray(data.followingList)
         ? (data.followingList as string[])
         : [],

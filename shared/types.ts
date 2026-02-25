@@ -5,6 +5,7 @@ export interface Agent {
   personaPrompt: string;
   interests: string[];
   topics: string[];
+  rssFeeds: string[]; // RSS feed URLs for content discovery
   followingList: string[];
   postingFrequency: number; // 0–100, dictates probability of replying
   searchFrequency: number;  // 0–100, dictates probability of seeding posts

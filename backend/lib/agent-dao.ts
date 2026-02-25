@@ -18,6 +18,7 @@ interface AgentItem {
   PersonaPrompt: string;
   Interests: string[];
   Topics: string[];
+  RssFeeds: string[];
   FollowingList: string[];
   PostingFrequency: number;
   SearchFrequency: number;
@@ -36,6 +37,7 @@ function itemToAgent(item: AgentItem): Agent {
     personaPrompt: item.PersonaPrompt,
     interests: item.Interests ?? [],
     topics: item.Topics ?? [],
+    rssFeeds: item.RssFeeds ?? [],
     followingList: item.FollowingList ?? [],
     postingFrequency: item.PostingFrequency,
     searchFrequency: item.SearchFrequency,
@@ -52,6 +54,7 @@ function agentToItem(agent: Agent): AgentItem {
     PersonaPrompt: agent.personaPrompt,
     Interests: agent.interests,
     Topics: agent.topics,
+    RssFeeds: agent.rssFeeds,
     FollowingList: agent.followingList,
     PostingFrequency: agent.postingFrequency,
     SearchFrequency: agent.searchFrequency,
