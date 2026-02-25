@@ -167,29 +167,67 @@ export class PostDao {
     nextToken?: string
   ): Promise<PaginatedResult<Post>> {
     const feedPk = date.includes('#') ? date : `DATE#${date}`;
-    const exclusiveStartKey = nextToken
+    let exclusiveStartKey = nextToken
       ? JSON.parse(Buffer.from(nextToken, 'base64').toString('utf-8'))
       : undefined;
 
-    const result = await this.client.send(
-      new QueryCommand({
-        TableName: this.tableName,
-        IndexName: FEED_INDEX,
-        KeyConditionExpression: 'feedPk = :pk',
-        FilterExpression: 'attribute_not_exists(ParentPostId)',
-        ExpressionAttributeValues: marshall({ ':pk': feedPk }),
-        ScanIndexForward: false, // newest first
-        Limit: limit,
-        ExclusiveStartKey: exclusiveStartKey,
-      })
-    );
+    const collectedPosts: Post[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined = exclusiveStartKey;
+    const maxIterations = 10; // Safety limit to prevent infinite loops
+    let iterations = 0;
 
-    const items = result.Items?.map((i) => itemToPost(unmarshall(i) as PostItem)) ?? [];
-    const newToken = result.LastEvaluatedKey
-      ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
+    while (collectedPosts.length < limit && iterations < maxIterations) {
+      iterations++;
+      const result = await this.client.send(
+        new QueryCommand({
+          TableName: this.tableName,
+          IndexName: FEED_INDEX,
+          KeyConditionExpression: 'feedPk = :pk',
+          ExpressionAttributeValues: marshall({ ':pk': feedPk }),
+          ScanIndexForward: false, // newest first
+          Limit: limit * 3, // Fetch more to account for filtered replies
+          ExclusiveStartKey: lastEvaluatedKey as Record<string, unknown> | undefined,
+        })
+      );
+
+      if (result.Items) {
+        for (const item of result.Items) {
+          const post = unmarshall(item) as PostItem;
+          // Only include root posts (no ParentPostId)
+          if (!post.ParentPostId) {
+            collectedPosts.push(itemToPost(post));
+            if (collectedPosts.length >= limit) {
+              // We have enough, but we need the correct lastEvaluatedKey
+              // Use the last item we processed as the cursor
+              lastEvaluatedKey = {
+                PK: item.PK,
+                SK: item.SK,
+                feedPk: item.feedPk,
+                CreatedAt: item.CreatedAt,
+              } as Record<string, unknown>;
+              break;
+            }
+          }
+        }
+      }
+
+      // If no more data, break
+      if (!result.LastEvaluatedKey) {
+        lastEvaluatedKey = undefined;
+        break;
+      }
+
+      // If we haven't filled our limit yet, continue from where DynamoDB left off
+      if (collectedPosts.length < limit) {
+        lastEvaluatedKey = result.LastEvaluatedKey as Record<string, unknown>;
+      }
+    }
+
+    const newToken = lastEvaluatedKey
+      ? Buffer.from(JSON.stringify(lastEvaluatedKey)).toString('base64')
       : null;
 
-    return { items, nextToken: newToken };
+    return { items: collectedPosts, nextToken: newToken };
   }
 
   async getAgentPosts(agentId: string): Promise<Post[]> {
