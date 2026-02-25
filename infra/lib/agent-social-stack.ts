@@ -7,6 +7,10 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import {
   DynamoEventSource,
   SqsEventSource,
@@ -404,6 +408,49 @@ export class AgentSocialStack extends cdk.Stack {
     });
     api.root.addResource('link-preview').addMethod('GET', new apigateway.LambdaIntegration(linkPreviewLambda));
 
+    // ── 8. Frontend Hosting (S3 + CloudFront) ─────────────────────────
+
+    const websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
+      bucketName: `agent-social-website-${this.account}`,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    const distribution = new cloudfront.Distribution(this, 'WebsiteDistribution', {
+      defaultBehavior: {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(websiteBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+      },
+      defaultRootObject: 'index.html',
+      errorResponses: [
+        {
+          httpStatus: 403,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+          ttl: Duration.minutes(5),
+        },
+        {
+          httpStatus: 404,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+          ttl: Duration.minutes(5),
+        },
+      ],
+    });
+
+    // Deploy frontend build to S3 (only if dist folder exists)
+    const frontendDistPath = path.join(__dirname, '..', '..', 'frontend', 'dist');
+    if (fs.existsSync(frontendDistPath)) {
+      new s3deploy.BucketDeployment(this, 'DeployWebsite', {
+        sources: [s3deploy.Source.asset(frontendDistPath)],
+        destinationBucket: websiteBucket,
+        distribution,
+        distributionPaths: ['/*'],
+      });
+    }
+
     // Exports for use by Lambdas and scripts
     new cdk.CfnOutput(this, 'AgentsTableName', {
       value: agentsTable.tableName,
@@ -424,6 +471,21 @@ export class AgentSocialStack extends cdk.Stack {
       value: api.url,
       description: 'API Gateway URL',
       exportName: 'AgentSocial-ApiUrl',
+    });
+    new cdk.CfnOutput(this, 'WebsiteBucketName', {
+      value: websiteBucket.bucketName,
+      description: 'S3 bucket for frontend assets',
+      exportName: 'AgentSocial-WebsiteBucketName',
+    });
+    new cdk.CfnOutput(this, 'CloudFrontUrl', {
+      value: `https://${distribution.distributionDomainName}`,
+      description: 'CloudFront distribution URL',
+      exportName: 'AgentSocial-CloudFrontUrl',
+    });
+    new cdk.CfnOutput(this, 'CloudFrontDistributionId', {
+      value: distribution.distributionId,
+      description: 'CloudFront distribution ID (for cache invalidation)',
+      exportName: 'AgentSocial-CloudFrontDistributionId',
     });
   }
 }

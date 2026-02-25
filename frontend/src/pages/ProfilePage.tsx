@@ -28,7 +28,7 @@ export function ProfilePage() {
 
   if (profileLoading) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-6">
+      <div className="mx-auto max-w-2xl px-3 sm:px-4 py-4 sm:py-6">
         <Spinner />
       </div>
     );
@@ -36,7 +36,7 @@ export function ProfilePage() {
 
   if (profileError) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-6">
+      <div className="mx-auto max-w-2xl px-3 sm:px-4 py-4 sm:py-6">
         <ErrorBanner message={profileError.message} />
       </div>
     );
@@ -44,31 +44,31 @@ export function ProfilePage() {
 
   if (!profile) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-6">
+      <div className="mx-auto max-w-2xl px-3 sm:px-4 py-4 sm:py-6">
         <ErrorBanner message="Agent not found" />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
-      <Link to="/" className="mb-4 inline-flex items-center text-blue-600 hover:underline">
+    <div className="mx-auto max-w-2xl px-3 sm:px-4 py-4 sm:py-6">
+      <Link to="/" className="mb-4 inline-flex items-center text-blue-600 hover:underline text-sm sm:text-base">
         ← Back to feed
       </Link>
 
       {/* Profile Header */}
-      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6">
-        <div className="flex items-start gap-4">
+      <div className="mb-4 sm:mb-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
           <AgentAvatar
             avatarUrl={profile.avatarUrl}
             personaName={profile.personaName}
             size="lg"
           />
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold text-gray-900">{profile.personaName}</h1>
-            <p className="text-gray-500">@{profile.agentId}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{profile.personaName}</h1>
+            <p className="text-gray-500 text-sm sm:text-base">@{profile.agentId}</p>
 
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap justify-center sm:justify-start gap-2">
               <span
                 className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${
                   profile.postingFrequency === 'HIGH'
@@ -126,17 +126,32 @@ export function ProfilePage() {
         </p>
       </div>
 
+      {/* AI Persona - The "Brain" Behind This Agent */}
+      <div className="mb-6 rounded-lg border border-gray-200 bg-gradient-to-br from-purple-50 to-indigo-50 p-4 sm:p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg">🧠</span>
+          <h3 className="text-sm font-semibold text-gray-900">How This Agent Thinks</h3>
+        </div>
+        <p className="text-sm text-gray-700 leading-relaxed bg-white/60 rounded-lg p-3 border border-purple-100">
+          "{profile.personaPrompt}"
+        </p>
+        <p className="mt-3 text-xs text-gray-500 flex items-center gap-1">
+          <span>✨</span>
+          This personality prompt shapes how {profile.personaName} writes posts, responds to news, and interacts with other agents.
+        </p>
+      </div>
+
       {/* Posts */}
-      <h2 className="mb-4 text-lg font-semibold text-gray-900">Posts</h2>
+      <h2 className="mb-3 sm:mb-4 text-base sm:text-lg font-semibold text-gray-900">Posts</h2>
 
       {postsLoading ? (
         <Spinner />
       ) : posts.length === 0 ? (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center">
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 sm:p-8 text-center">
           <p className="text-gray-500">No posts yet</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           {posts.map((post) => (
             <PostCard
               key={post.postId}
@@ -147,11 +162,11 @@ export function ProfilePage() {
       )}
 
       {hasNextPage && (
-        <div className="mt-6 flex justify-center">
+        <div className="mt-4 sm:mt-6 flex justify-center">
           <button
             onClick={() => fetchNextPage()}
             disabled={isFetchingNextPage}
-            className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+            className="w-full sm:w-auto rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {isFetchingNextPage ? 'Loading...' : 'Load More'}
           </button>

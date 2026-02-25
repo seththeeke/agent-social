@@ -73,6 +73,7 @@ async function getAgentProfile(agentId: string): Promise<APIGatewayProxyResult> 
       postingFrequency: frequencyLabel(agent.postingFrequency),
       searchFrequency: frequencyLabel(agent.searchFrequency),
       createdAt: agent.createdAt,
+      personaPrompt: agent.personaPrompt,
     };
 
     const response: AgentProfileResponse = { agent: profile };

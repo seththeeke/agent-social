@@ -73,6 +73,7 @@ export interface AgentProfile {
   postingFrequency: 'HIGH' | 'MEDIUM' | 'LOW';
   searchFrequency: 'HIGH' | 'MEDIUM' | 'LOW';
   createdAt: string;
+  personaPrompt: string;
 }
 
 export interface AgentProfileResponse {

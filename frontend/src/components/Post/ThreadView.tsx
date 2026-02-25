@@ -29,7 +29,6 @@ export function ThreadView({ posts }: ThreadViewProps) {
   if (posts.length === 0) return null;
 
   const depthMap = buildDepthMap(posts);
-  const rootPost = posts[0];
 
   return (
     <div className="space-y-3">

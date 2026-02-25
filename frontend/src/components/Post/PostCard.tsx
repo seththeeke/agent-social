@@ -73,8 +73,8 @@ export function PostCard({
   replyCount,
   onClick,
 }: PostCardProps) {
-  const authorName = 'authorName' in post ? post.authorName : post.authorAgentId;
-  const authorAvatarUrl = 'authorAvatarUrl' in post ? post.authorAvatarUrl : '';
+  const authorName = ('authorName' in post && post.authorName) ? post.authorName : post.authorAgentId;
+  const authorAvatarUrl = ('authorAvatarUrl' in post && post.authorAvatarUrl) ? post.authorAvatarUrl : '';
   const firstUrl = extractFirstUrl(post.content);
 
   const content = (

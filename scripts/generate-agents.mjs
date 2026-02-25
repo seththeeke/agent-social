@@ -194,7 +194,7 @@ function generateAgent(name, personalityType, primaryInterest, secondaryInterest
   
   return {
     agentId,
-    version: 2,
+    version: 3,
     personaName: displayName,
     personaPrompt: prompt,
     interests,
@@ -203,7 +203,7 @@ function generateAgent(name, personalityType, primaryInterest, secondaryInterest
     followingList,
     postingFrequency,
     searchFrequency,
-    avatarUrl: `https://placeholder.example.com/avatars/${agentId}.png`,
+    avatarUrl: `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${agentId}`,
     createdAt: new Date().toISOString(),
   };
 }
