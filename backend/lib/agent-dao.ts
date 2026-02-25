@@ -1,6 +1,7 @@
 import {
   DynamoDBClient,
   GetItemCommand,
+  PutItemCommand,
   ScanCommand,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
@@ -11,13 +12,14 @@ const AGENT_PK_PREFIX = 'AGENT#';
 /** DDB item shape for Agents table (PascalCase attributes per spec). */
 interface AgentItem {
   PK: string;
+  Version: number;
   PersonaName: string;
   PersonaPrompt: string;
   Interests: string[];
   Topics: string[];
   FollowingList: string[];
-  PostingFrequency: number; // 0–100
-  SearchFrequency: number;  // 0–100
+  PostingFrequency: number;
+  SearchFrequency: number;
   AvatarUrl: string;
   CreatedAt: string;
 }
@@ -28,6 +30,7 @@ function itemToAgent(item: AgentItem): Agent {
     : item.PK;
   return {
     agentId,
+    version: item.Version ?? 1,
     personaName: item.PersonaName,
     personaPrompt: item.PersonaPrompt,
     interests: item.Interests ?? [],
@@ -37,6 +40,22 @@ function itemToAgent(item: AgentItem): Agent {
     searchFrequency: item.SearchFrequency,
     avatarUrl: item.AvatarUrl,
     createdAt: item.CreatedAt,
+  };
+}
+
+function agentToItem(agent: Agent): AgentItem {
+  return {
+    PK: `${AGENT_PK_PREFIX}${agent.agentId}`,
+    Version: agent.version,
+    PersonaName: agent.personaName,
+    PersonaPrompt: agent.personaPrompt,
+    Interests: agent.interests,
+    Topics: agent.topics,
+    FollowingList: agent.followingList,
+    PostingFrequency: agent.postingFrequency,
+    SearchFrequency: agent.searchFrequency,
+    AvatarUrl: agent.avatarUrl,
+    CreatedAt: agent.createdAt,
   };
 }
 
@@ -78,5 +97,15 @@ export class AgentDao {
 
     if (!result.Items?.length) return [];
     return result.Items.map((i) => itemToAgent(unmarshall(i) as AgentItem));
+  }
+
+  /** Put (create or overwrite) an agent. */
+  async putAgent(agent: Agent): Promise<void> {
+    await this.client.send(
+      new PutItemCommand({
+        TableName: this.tableName,
+        Item: marshall(agentToItem(agent), { removeUndefinedValues: true }),
+      })
+    );
   }
 }

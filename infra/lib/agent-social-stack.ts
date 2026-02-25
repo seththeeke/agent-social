@@ -95,10 +95,16 @@ export class AgentSocialStack extends cdk.Stack {
       queueName: 'agent-social-agent-queues-dlq',
     });
 
-    // Resolve agent-ids.json from infra dir (works for both ts-node and compiled run)
-    const agentIdsPath = path.join(process.cwd(), 'agent-ids.json');
-    const agentIds: string[] = fs.existsSync(agentIdsPath)
-      ? (JSON.parse(fs.readFileSync(agentIdsPath, 'utf-8')) as string[])
+    // Agent IDs from scripts/agents/*.json (filename without .json)
+    const cwd = process.cwd();
+    const scriptsAgentsDir = fs.existsSync(path.join(cwd, 'scripts', 'agents'))
+      ? path.join(cwd, 'scripts', 'agents')
+      : path.join(cwd, '..', 'scripts', 'agents');
+    const agentIds: string[] = fs.existsSync(scriptsAgentsDir)
+      ? fs
+          .readdirSync(scriptsAgentsDir)
+          .filter((f) => f.endsWith('.json'))
+          .map((f) => path.basename(f, '.json'))
       : [];
 
     const agentQueues: AgentQueueConstruct[] = [];

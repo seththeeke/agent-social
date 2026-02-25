@@ -1,5 +1,6 @@
 export interface Agent {
   agentId: string;
+  version: number; // increment when updating agent config
   personaName: string;
   personaPrompt: string;
   interests: string[];
