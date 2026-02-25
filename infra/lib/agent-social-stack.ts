@@ -11,6 +11,10 @@ import {
   DynamoEventSource,
   SqsEventSource,
 } from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as budgets from 'aws-cdk-lib/aws-budgets';
 import { Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { AgentQueueConstruct } from './agent-queue-construct';
@@ -237,10 +241,68 @@ export class AgentSocialStack extends cdk.Stack {
     // (scoped per Lambda above)
 
     // ── 5. Scheduling ────────────────────────────────────────────
-    // (EventBridge for instigator disabled; invoke manually when needed)
+    new events.Rule(this, 'InstigatorScheduleRule', {
+      ruleName: 'agent-social-instigator-schedule',
+      schedule: events.Schedule.rate(Duration.minutes(30)),
+      targets: [new targets.LambdaFunction(agentInstigatorLambda)],
+    });
 
     // ── 6. Alarms ────────────────────────────────────────────────
-    // (Budget, CloudWatch — next phase)
+    const alertEmail = 'seththeeke@gmail.com';
+
+    // AWS Budget — hard cap alert at $10/month
+    new budgets.CfnBudget(this, 'MonthlyBudget', {
+      budget: {
+        budgetType: 'COST',
+        timeUnit: 'MONTHLY',
+        budgetLimit: { amount: 10, unit: 'USD' },
+      },
+      notificationsWithSubscribers: [
+        {
+          notification: {
+            notificationType: 'ACTUAL',
+            comparisonOperator: 'GREATER_THAN',
+            threshold: 80,
+          },
+          subscribers: [{ subscriptionType: 'EMAIL', address: alertEmail }],
+        },
+        {
+          notification: {
+            notificationType: 'FORECASTED',
+            comparisonOperator: 'GREATER_THAN',
+            threshold: 100,
+          },
+          subscribers: [{ subscriptionType: 'EMAIL', address: alertEmail }],
+        },
+      ],
+    });
+
+    // Lambda invocation rate alarm — catches runaway loops
+    new cloudwatch.Alarm(this, 'LambdaInvocationAlarm', {
+      alarmName: 'agent-social-processor-high-invocations',
+      metric: agentProcessorLambda.metricInvocations({ period: Duration.minutes(5) }),
+      threshold: 500,
+      evaluationPeriods: 1,
+      alarmDescription: 'Agent processor invocations unusually high — possible loop',
+    });
+
+    // DLQ depth alarm — catches failed processing
+    new cloudwatch.Alarm(this, 'DLQDepthAlarm', {
+      alarmName: 'agent-social-dlq-depth',
+      metric: dlq.metricApproximateNumberOfMessagesVisible(),
+      threshold: 10,
+      evaluationPeriods: 1,
+      alarmDescription: 'Messages accumulating in DLQ',
+    });
+
+    // Bedrock/Lambda error alarm
+    new cloudwatch.Alarm(this, 'ProcessorErrorAlarm', {
+      alarmName: 'agent-social-processor-errors',
+      metric: agentProcessorLambda.metricErrors({ period: Duration.minutes(5) }),
+      threshold: 20,
+      evaluationPeriods: 2,
+      alarmDescription: 'Agent processor errors elevated — possible Bedrock issue',
+    });
 
     // Exports for use by Lambdas and scripts
     new cdk.CfnOutput(this, 'AgentsTableName', {
