@@ -1,6 +1,14 @@
+import * as path from 'path';
+import * as fs from 'fs';
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { Construct } from 'constructs';
+import { AgentQueueConstruct } from './agent-queue-construct';
 
 export class AgentSocialStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -78,10 +86,60 @@ export class AgentSocialStack extends cdk.Stack {
     });
 
     // ── 2. Messaging ─────────────────────────────────────────────
-    // (SNS topic, SQS queues, subscriptions — next phase)
+    const topic = new sns.Topic(this, 'AgentSocialEventsTopic', {
+      topicName: 'agent-social-events',
+      displayName: 'Agent Social New Post Events',
+    });
+
+    const dlq = new sqs.Queue(this, 'AgentQueuesDLQ', {
+      queueName: 'agent-social-agent-queues-dlq',
+    });
+
+    // Resolve agent-ids.json from infra dir (works for both ts-node and compiled run)
+    const agentIdsPath = path.join(process.cwd(), 'agent-ids.json');
+    const agentIds: string[] = fs.existsSync(agentIdsPath)
+      ? (JSON.parse(fs.readFileSync(agentIdsPath, 'utf-8')) as string[])
+      : [];
+
+    const agentQueues: AgentQueueConstruct[] = [];
+    for (const agentId of agentIds) {
+      const construct = new AgentQueueConstruct(this, `AgentQueue-${agentId}`, {
+        agentId,
+        topic,
+        deadLetterQueue: dlq,
+      });
+      agentQueues.push(construct);
+    }
 
     // ── 3. Lambdas ───────────────────────────────────────────────
-    // (post-fan-out, agent-processor, agent-instigator — next phase)
+    const backendPath = path.join(__dirname, '..', '..', 'backend');
+
+    const postFanOutLambda = new lambdaNodejs.NodejsFunction(
+      this,
+      'PostFanOutLambda',
+      {
+        functionName: 'agent-social-post-fan-out',
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: 'handler',
+        entry: path.join(backendPath, 'lambdas', 'post-fan-out', 'index.ts'),
+        projectRoot: backendPath,
+        depsLockFilePath: path.join(backendPath, 'package-lock.json'),
+        environment: {
+          SNS_TOPIC_ARN: topic.topicArn,
+        },
+      }
+    );
+
+    postFanOutLambda.addEventSource(
+      new DynamoEventSource(postsTable, {
+        startingPosition: lambda.StartingPosition.LATEST,
+        batchSize: 10,
+      })
+    );
+    postsTable.grantStreamRead(postFanOutLambda);
+    topic.grantPublish(postFanOutLambda);
+
+    // agent-processor, agent-instigator — next phase
 
     // ── 4. IAM ───────────────────────────────────────────────────
     // (scoped roles per Lambda — next phase)
@@ -102,6 +160,11 @@ export class AgentSocialStack extends cdk.Stack {
       value: postsTable.tableName,
       description: 'DynamoDB Posts table name',
       exportName: 'AgentSocial-PostsTableName',
+    });
+    new cdk.CfnOutput(this, 'SnsTopicArn', {
+      value: topic.topicArn,
+      description: 'SNS topic ARN for new post events',
+      exportName: 'AgentSocial-SnsTopicArn',
     });
   }
 }
