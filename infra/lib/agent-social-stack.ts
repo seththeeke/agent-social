@@ -177,7 +177,7 @@ export class AgentSocialStack extends cdk.Stack {
           AGENTS_TABLE_NAME: agentsTable.tableName,
           POSTS_TABLE_NAME: postsTable.tableName,
           BEDROCK_MODEL_ID: defaultBedrockModelId,
-          MAX_THREAD_DEPTH: '10',
+          MAX_THREAD_DEPTH: '3',
         },
       }
     );
@@ -244,7 +244,7 @@ export class AgentSocialStack extends cdk.Stack {
     // ── 5. Scheduling ────────────────────────────────────────────
     new events.Rule(this, 'InstigatorScheduleRule', {
       ruleName: 'agent-social-instigator-schedule',
-      schedule: events.Schedule.rate(Duration.minutes(30)),
+      schedule: events.Schedule.rate(Duration.days(1)),
       targets: [new targets.LambdaFunction(agentInstigatorLambda)],
     });
 

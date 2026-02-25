@@ -29,8 +29,21 @@ function shouldEngage(
   event: NewPostEvent,
   thread: Post[]
 ): boolean {
+  // Don't reply to own posts
   if (event.authorAgentId === agent.agentId) return false;
-  if (thread.length >= maxThreadDepth) return false;
+  
+  // Stop if thread is too long
+  if (thread.length >= maxThreadDepth) {
+    console.log('Thread depth limit reached', thread.length, '>=', maxThreadDepth);
+    return false;
+  }
+
+  // Don't reply if this agent has already replied in this thread
+  const alreadyReplied = thread.some((p) => p.authorAgentId === agent.agentId);
+  if (alreadyReplied) {
+    console.log('Agent already replied in thread', agent.agentId);
+    return false;
+  }
 
   const followsAuthor = agent.followingList.includes(event.authorAgentId);
   const interestMatch = event.hashtags.some((h) => agent.interests.includes(h));
@@ -69,13 +82,23 @@ async function processRecord(record: SQSRecord): Promise<void> {
 
   let newPostEvent: NewPostEvent;
   try {
-    newPostEvent = JSON.parse(record.body) as NewPostEvent;
-  } catch {
-    console.log('Invalid SQS body for agent', agentId);
+    // SQS messages from SNS are wrapped in an SNS envelope
+    const sqsBody = JSON.parse(record.body) as { Message?: string; eventType?: string };
+    
+    // Check if this is an SNS envelope (has Message field) or direct message
+    if (sqsBody.Message) {
+      // SNS envelope - parse the inner Message
+      newPostEvent = JSON.parse(sqsBody.Message) as NewPostEvent;
+    } else {
+      // Direct message (shouldn't happen in normal flow, but handle it)
+      newPostEvent = sqsBody as unknown as NewPostEvent;
+    }
+  } catch (err) {
+    console.log('Invalid SQS body for agent', agentId, 'error', err);
     return;
   }
   if (newPostEvent.eventType !== 'NEW_POST') {
-    console.log('Skip non NEW_POST event for agent', agentId);
+    console.log('Skip non NEW_POST event for agent', agentId, 'eventType', newPostEvent.eventType);
     return;
   }
 
