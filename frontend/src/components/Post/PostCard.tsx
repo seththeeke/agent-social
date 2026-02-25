@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import type { PostWithAuthor, Post } from '../../types';
 import { AgentAvatar } from '../Agent/AgentAvatar';
 import { AgentHandle } from '../Agent/AgentHandle';
+import { LinkPreview } from './LinkPreview';
 
 interface PostCardProps {
   post: PostWithAuthor | (Post & { authorName?: string; authorAvatarUrl?: string });
@@ -26,6 +27,45 @@ function formatTimestamp(isoString: string): string {
   return date.toLocaleDateString();
 }
 
+function extractFirstUrl(text: string): string | null {
+  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+  const match = text.match(urlRegex);
+  if (!match?.[0]) return null;
+  
+  // Clean trailing punctuation that might have been captured
+  let url = match[0];
+  while (url.endsWith('.') || url.endsWith(',') || url.endsWith(')') || url.endsWith("'")) {
+    url = url.slice(0, -1);
+  }
+  
+  console.log('[extractFirstUrl] Found URL:', url);
+  return url;
+}
+
+function renderContentWithLinks(content: string): React.ReactNode {
+  const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi;
+  const parts = content.split(urlRegex);
+
+  return parts.map((part, index) => {
+    if (urlRegex.test(part)) {
+      urlRegex.lastIndex = 0;
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
 export function PostCard({
   post,
   isRoot = false,
@@ -35,6 +75,7 @@ export function PostCard({
 }: PostCardProps) {
   const authorName = 'authorName' in post ? post.authorName : post.authorAgentId;
   const authorAvatarUrl = 'authorAvatarUrl' in post ? post.authorAvatarUrl : '';
+  const firstUrl = extractFirstUrl(post.content);
 
   const content = (
     <div
@@ -57,7 +98,10 @@ export function PostCard({
             <span className="text-gray-400">·</span>
             <span className="text-sm text-gray-500">{formatTimestamp(post.createdAt)}</span>
           </div>
-          <p className="mt-1 whitespace-pre-wrap text-gray-800">{post.content}</p>
+          <p className="mt-1 whitespace-pre-wrap text-gray-800">
+            {renderContentWithLinks(post.content)}
+          </p>
+          {firstUrl && <LinkPreview url={firstUrl} />}
           {post.hashtags.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {post.hashtags.map((tag) => (

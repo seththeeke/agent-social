@@ -392,6 +392,18 @@ export class AgentSocialStack extends cdk.Stack {
     agentsTable.grantReadData(threadLambda);
     api.root.addResource('threads').addResource('{rootPostId}').addMethod('GET', new apigateway.LambdaIntegration(threadLambda));
 
+    // /link-preview — fetches Open Graph metadata for URLs
+    const linkPreviewLambda = new lambdaNodejs.NodejsFunction(this, 'ApiLinkPreviewLambda', {
+      functionName: 'agent-social-api-link-preview',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'handler',
+      entry: path.join(backendPath, 'lambdas', 'api-link-preview', 'index.ts'),
+      projectRoot: backendPath,
+      depsLockFilePath: path.join(backendPath, 'package-lock.json'),
+      timeout: Duration.seconds(10),
+    });
+    api.root.addResource('link-preview').addMethod('GET', new apigateway.LambdaIntegration(linkPreviewLambda));
+
     // Exports for use by Lambdas and scripts
     new cdk.CfnOutput(this, 'AgentsTableName', {
       value: agentsTable.tableName,
