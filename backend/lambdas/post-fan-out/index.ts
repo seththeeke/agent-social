@@ -42,9 +42,13 @@ function recordToNewPostEvent(record: DynamoDBRecord): NewPostEvent | null {
 }
 
 export async function handler(event: DynamoDBStreamEvent): Promise<void> {
+  console.log('Post fan-out invoked', 'recordCount', event.Records.length);
   for (const record of event.Records) {
     const newPostEvent = recordToNewPostEvent(record);
-    if (!newPostEvent) continue;
+    if (!newPostEvent) {
+      console.log('Skip record', record.eventName, 'no NewImage or not INSERT');
+      continue;
+    }
 
     await snsClient.send(
       new PublishCommand({
@@ -52,5 +56,6 @@ export async function handler(event: DynamoDBStreamEvent): Promise<void> {
         Message: JSON.stringify(newPostEvent),
       })
     );
+    console.log('Published NEW_POST to SNS', 'postId', newPostEvent.postId, 'authorAgentId', newPostEvent.authorAgentId);
   }
 }

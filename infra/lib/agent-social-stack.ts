@@ -2,11 +2,16 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
-import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import {
+  DynamoEventSource,
+  SqsEventSource,
+} from 'aws-cdk-lib/aws-lambda-event-sources';
+import { Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { AgentQueueConstruct } from './agent-queue-construct';
 
@@ -145,13 +150,94 @@ export class AgentSocialStack extends cdk.Stack {
     postsTable.grantStreamRead(postFanOutLambda);
     topic.grantPublish(postFanOutLambda);
 
-    // agent-processor, agent-instigator — next phase
+    const defaultBedrockModelId = 'amazon.nova-micro-v1:0';
+
+    const agentProcessorLambda = new lambdaNodejs.NodejsFunction(
+      this,
+      'AgentProcessorLambda',
+      {
+        functionName: 'agent-social-agent-processor',
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: 'handler',
+        entry: path.join(
+          backendPath,
+          'lambdas',
+          'agent-processor',
+          'index.ts'
+        ),
+        projectRoot: backendPath,
+        depsLockFilePath: path.join(backendPath, 'package-lock.json'),
+        timeout: Duration.seconds(60),
+        environment: {
+          AGENTS_TABLE_NAME: agentsTable.tableName,
+          POSTS_TABLE_NAME: postsTable.tableName,
+          BEDROCK_MODEL_ID: defaultBedrockModelId,
+          MAX_THREAD_DEPTH: '10',
+        },
+      }
+    );
+
+    agentsTable.grantReadData(agentProcessorLambda);
+    postsTable.grantReadData(agentProcessorLambda);
+    postsTable.grantWriteData(agentProcessorLambda);
+    agentProcessorLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['bedrock:InvokeModel'],
+        resources: [
+          `arn:aws:bedrock:${this.region}::foundation-model/${defaultBedrockModelId}`,
+        ],
+      })
+    );
+
+    for (const { queue } of agentQueues) {
+      agentProcessorLambda.addEventSource(
+        new SqsEventSource(queue, { batchSize: 1 })
+      );
+      queue.grantConsumeMessages(agentProcessorLambda);
+    }
+
+    const agentInstigatorLambda = new lambdaNodejs.NodejsFunction(
+      this,
+      'AgentInstigatorLambda',
+      {
+        functionName: 'agent-social-agent-instigator',
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: 'handler',
+        entry: path.join(
+          backendPath,
+          'lambdas',
+          'agent-instigator',
+          'index.ts'
+        ),
+        projectRoot: backendPath,
+        depsLockFilePath: path.join(backendPath, 'package-lock.json'),
+        timeout: Duration.minutes(2),
+        environment: {
+          AGENTS_TABLE_NAME: agentsTable.tableName,
+          POSTS_TABLE_NAME: postsTable.tableName,
+          BEDROCK_MODEL_ID: defaultBedrockModelId,
+        },
+      }
+    );
+
+    agentsTable.grantReadData(agentInstigatorLambda);
+    postsTable.grantWriteData(agentInstigatorLambda);
+    agentInstigatorLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['bedrock:InvokeModel'],
+        resources: [
+          `arn:aws:bedrock:${this.region}::foundation-model/${defaultBedrockModelId}`,
+        ],
+      })
+    );
 
     // ── 4. IAM ───────────────────────────────────────────────────
-    // (scoped roles per Lambda — next phase)
+    // (scoped per Lambda above)
 
     // ── 5. Scheduling ────────────────────────────────────────────
-    // (EventBridge for instigator — next phase)
+    // (EventBridge for instigator disabled; invoke manually when needed)
 
     // ── 6. Alarms ────────────────────────────────────────────────
     // (Budget, CloudWatch — next phase)

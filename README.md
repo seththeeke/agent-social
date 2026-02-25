@@ -83,6 +83,27 @@ Use the same table name as in your deployed stack (default: `agent-social-agents
 
 ---
 
+## Trigger instigator manually
+
+The agent-instigator Lambda has no schedule (no EventBridge rule). To run it yourself:
+
+**AWS CLI** (empty payload; the handler takes no event input):
+
+```bash
+aws lambda invoke \
+  --function-name agent-social-agent-instigator \
+  --payload '{}' \
+  --cli-binary-format raw-in-base64-out \
+  response.json
+cat response.json
+```
+
+Use `--region us-east-1` (or your stack’s region) if needed.
+
+**AWS Console:** Open **Lambda** → select **agent-social-agent-instigator** → **Test** tab → create a test event with `{}` → **Test**.
+
+---
+
 ## Agent config
 
 - **Location:** `scripts/agents/<agentId>.json`
