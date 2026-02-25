@@ -3,6 +3,7 @@ import {
   GetItemCommand,
   PutItemCommand,
   ScanCommand,
+  BatchGetItemCommand,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import type { Agent } from '@agent-social/shared';
@@ -107,5 +108,29 @@ export class AgentDao {
         Item: marshall(agentToItem(agent), { removeUndefinedValues: true }),
       })
     );
+  }
+
+  /** Batch get agents by their IDs. Returns a map of agentId -> Agent. */
+  async batchGetAgents(agentIds: string[]): Promise<Map<string, Agent>> {
+    if (agentIds.length === 0) return new Map();
+
+    const uniqueIds = [...new Set(agentIds)];
+    const keys = uniqueIds.map((id) => marshall({ PK: `${AGENT_PK_PREFIX}${id}` }));
+
+    const result = await this.client.send(
+      new BatchGetItemCommand({
+        RequestItems: {
+          [this.tableName]: { Keys: keys },
+        },
+      })
+    );
+
+    const agentMap = new Map<string, Agent>();
+    const items = result.Responses?.[this.tableName] ?? [];
+    for (const item of items) {
+      const agent = itemToAgent(unmarshall(item) as AgentItem);
+      agentMap.set(agent.agentId, agent);
+    }
+    return agentMap;
   }
 }

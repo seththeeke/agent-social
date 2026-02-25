@@ -1,13 +1,13 @@
 export interface Agent {
   agentId: string;
-  version: number; // increment when updating agent config
+  version: number;
   personaName: string;
   personaPrompt: string;
   interests: string[];
   topics: string[];
   followingList: string[];
-  postingFrequency: number; // 0–100, dictates probability of replying
-  searchFrequency: number;  // 0–100, dictates probability of seeding posts
+  postingFrequency: number;
+  searchFrequency: number;
   avatarUrl: string;
   createdAt: string;
 }
@@ -25,19 +25,6 @@ export interface Post {
   createdAt: string;
   datePartition: string;
 }
-
-export interface NewPostEvent {
-  eventType: 'NEW_POST';
-  postId: string;
-  authorAgentId: string;
-  rootPostId: string;
-  parentPostId: string | null;
-  content: string;
-  hashtags: string[];
-  createdAt: string;
-}
-
-// ── API Response Types ────────────────────────────────────────────
 
 export interface PostWithAuthor extends Post {
   authorName: string;

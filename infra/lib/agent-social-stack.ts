@@ -15,6 +15,7 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as budgets from 'aws-cdk-lib/aws-budgets';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import { Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { AgentQueueConstruct } from './agent-queue-construct';
@@ -304,6 +305,93 @@ export class AgentSocialStack extends cdk.Stack {
       alarmDescription: 'Agent processor errors elevated — possible Bedrock issue',
     });
 
+    // ── 7. API Gateway ───────────────────────────────────────────────
+
+    const api = new apigateway.RestApi(this, 'AgentSocialApi', {
+      restApiName: 'agent-social-api',
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: ['GET', 'OPTIONS'],
+        allowHeaders: ['Content-Type'],
+      },
+      deployOptions: {
+        stageName: 'prod',
+        throttlingRateLimit: 50,
+        throttlingBurstLimit: 100,
+      },
+    });
+
+    // /feed
+    const feedLambda = new lambdaNodejs.NodejsFunction(this, 'ApiFeedLambda', {
+      functionName: 'agent-social-api-feed',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'handler',
+      entry: path.join(backendPath, 'lambdas', 'api-feed', 'index.ts'),
+      projectRoot: backendPath,
+      depsLockFilePath: path.join(backendPath, 'package-lock.json'),
+      timeout: Duration.seconds(10),
+      environment: {
+        POSTS_TABLE_NAME: postsTable.tableName,
+        AGENTS_TABLE_NAME: agentsTable.tableName,
+      },
+    });
+    postsTable.grantReadData(feedLambda);
+    agentsTable.grantReadData(feedLambda);
+    api.root.addResource('feed').addMethod('GET', new apigateway.LambdaIntegration(feedLambda));
+
+    // /agents and /agents/{agentId}
+    const agentsLambda = new lambdaNodejs.NodejsFunction(this, 'ApiAgentsLambda', {
+      functionName: 'agent-social-api-agents',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'handler',
+      entry: path.join(backendPath, 'lambdas', 'api-agents', 'index.ts'),
+      projectRoot: backendPath,
+      depsLockFilePath: path.join(backendPath, 'package-lock.json'),
+      timeout: Duration.seconds(10),
+      environment: {
+        AGENTS_TABLE_NAME: agentsTable.tableName,
+      },
+    });
+    agentsTable.grantReadData(agentsLambda);
+    const agentsResource = api.root.addResource('agents');
+    agentsResource.addMethod('GET', new apigateway.LambdaIntegration(agentsLambda));
+    const agentByIdResource = agentsResource.addResource('{agentId}');
+    agentByIdResource.addMethod('GET', new apigateway.LambdaIntegration(agentsLambda));
+
+    // /agents/{agentId}/posts
+    const agentPostsLambda = new lambdaNodejs.NodejsFunction(this, 'ApiAgentPostsLambda', {
+      functionName: 'agent-social-api-agent-posts',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'handler',
+      entry: path.join(backendPath, 'lambdas', 'api-agent-posts', 'index.ts'),
+      projectRoot: backendPath,
+      depsLockFilePath: path.join(backendPath, 'package-lock.json'),
+      timeout: Duration.seconds(10),
+      environment: {
+        POSTS_TABLE_NAME: postsTable.tableName,
+      },
+    });
+    postsTable.grantReadData(agentPostsLambda);
+    agentByIdResource.addResource('posts').addMethod('GET', new apigateway.LambdaIntegration(agentPostsLambda));
+
+    // /threads/{rootPostId}
+    const threadLambda = new lambdaNodejs.NodejsFunction(this, 'ApiThreadLambda', {
+      functionName: 'agent-social-api-thread',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'handler',
+      entry: path.join(backendPath, 'lambdas', 'api-thread', 'index.ts'),
+      projectRoot: backendPath,
+      depsLockFilePath: path.join(backendPath, 'package-lock.json'),
+      timeout: Duration.seconds(10),
+      environment: {
+        POSTS_TABLE_NAME: postsTable.tableName,
+        AGENTS_TABLE_NAME: agentsTable.tableName,
+      },
+    });
+    postsTable.grantReadData(threadLambda);
+    agentsTable.grantReadData(threadLambda);
+    api.root.addResource('threads').addResource('{rootPostId}').addMethod('GET', new apigateway.LambdaIntegration(threadLambda));
+
     // Exports for use by Lambdas and scripts
     new cdk.CfnOutput(this, 'AgentsTableName', {
       value: agentsTable.tableName,
@@ -319,6 +407,11 @@ export class AgentSocialStack extends cdk.Stack {
       value: topic.topicArn,
       description: 'SNS topic ARN for new post events',
       exportName: 'AgentSocial-SnsTopicArn',
+    });
+    new cdk.CfnOutput(this, 'ApiUrl', {
+      value: api.url,
+      description: 'API Gateway URL',
+      exportName: 'AgentSocial-ApiUrl',
     });
   }
 }

@@ -65,6 +65,11 @@ export interface MakePostParams {
   mentions?: string[];
 }
 
+export interface PaginatedResult<T> {
+  items: T[];
+  nextToken: string | null;
+}
+
 export class PostDao {
   private readonly tableName: string;
   private readonly client: DynamoDBClient;
@@ -156,6 +161,37 @@ export class PostDao {
     return result.Items.map((i) => itemToPost(unmarshall(i) as PostItem));
   }
 
+  async getFeedPaginated(
+    date: string,
+    limit: number = 20,
+    nextToken?: string
+  ): Promise<PaginatedResult<Post>> {
+    const feedPk = date.includes('#') ? date : `DATE#${date}`;
+    const exclusiveStartKey = nextToken
+      ? JSON.parse(Buffer.from(nextToken, 'base64').toString('utf-8'))
+      : undefined;
+
+    const result = await this.client.send(
+      new QueryCommand({
+        TableName: this.tableName,
+        IndexName: FEED_INDEX,
+        KeyConditionExpression: 'feedPk = :pk',
+        FilterExpression: 'attribute_not_exists(ParentPostId)',
+        ExpressionAttributeValues: marshall({ ':pk': feedPk }),
+        ScanIndexForward: false, // newest first
+        Limit: limit,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+
+    const items = result.Items?.map((i) => itemToPost(unmarshall(i) as PostItem)) ?? [];
+    const newToken = result.LastEvaluatedKey
+      ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
+      : null;
+
+    return { items, nextToken: newToken };
+  }
+
   async getAgentPosts(agentId: string): Promise<Post[]> {
     const result = await this.client.send(
       new QueryCommand({
@@ -171,5 +207,34 @@ export class PostDao {
 
     if (!result.Items?.length) return [];
     return result.Items.map((i) => itemToPost(unmarshall(i) as PostItem));
+  }
+
+  async getAgentPostsPaginated(
+    agentId: string,
+    limit: number = 20,
+    nextToken?: string
+  ): Promise<PaginatedResult<Post>> {
+    const exclusiveStartKey = nextToken
+      ? JSON.parse(Buffer.from(nextToken, 'base64').toString('utf-8'))
+      : undefined;
+
+    const result = await this.client.send(
+      new QueryCommand({
+        TableName: this.tableName,
+        IndexName: AGENT_POSTS_INDEX,
+        KeyConditionExpression: 'authorPk = :pk',
+        ExpressionAttributeValues: marshall({ ':pk': `AUTHOR#${agentId}` }),
+        ScanIndexForward: false,
+        Limit: limit,
+        ExclusiveStartKey: exclusiveStartKey,
+      })
+    );
+
+    const items = result.Items?.map((i) => itemToPost(unmarshall(i) as PostItem)) ?? [];
+    const newToken = result.LastEvaluatedKey
+      ? Buffer.from(JSON.stringify(result.LastEvaluatedKey)).toString('base64')
+      : null;
+
+    return { items, nextToken: newToken };
   }
 }
