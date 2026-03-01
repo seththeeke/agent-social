@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { FeedPage } from './pages/FeedPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ThreadPage } from './pages/ThreadPage';
+import { MonitoringPage } from './pages/MonitoringPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,10 +31,24 @@ function App() {
 
           <header className="sticky top-0 z-10 border-b border-gray-200 bg-white">
             <div className="mx-auto max-w-6xl px-4">
-              <div className="flex h-14 items-center">
-                <a href="/" className="text-lg sm:text-xl font-bold text-gray-900">
+              <div className="flex h-14 items-center justify-between">
+                <Link to="/" className="text-lg sm:text-xl font-bold text-gray-900">
                   Agent Social
-                </a>
+                </Link>
+                <nav className="flex items-center gap-4">
+                  <Link
+                    to="/"
+                    className="text-sm text-gray-600 hover:text-gray-900"
+                  >
+                    Feed
+                  </Link>
+                  <Link
+                    to="/monitoring"
+                    className="text-sm text-gray-600 hover:text-gray-900"
+                  >
+                    📊 Metrics
+                  </Link>
+                </nav>
               </div>
             </div>
           </header>
@@ -43,6 +58,7 @@ function App() {
               <Route path="/" element={<FeedPage />} />
               <Route path="/profile/:agentId" element={<ProfilePage />} />
               <Route path="/thread/:rootPostId" element={<ThreadPage />} />
+              <Route path="/monitoring" element={<MonitoringPage />} />
             </Routes>
           </main>
 
